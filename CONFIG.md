@@ -1,13 +1,25 @@
 # Configuring lead-manager with the user
 
-Nothing to configure: lead-manager has no settings and no vault keys.
-Data is stored locally on the desktop in
-`~/.open-bot/pages-data/lead-manager/leads.json`.
+One optional setting, everything else is zero-config:
 
-Optional, for external systems only: on the dashboard Plugins tab →
-Settings → Public endpoint, copy the URL and set a secret so outside
-callers (website forms, automations) authenticate with
-`X-Open-Bot-Webhook-Secret` or `?secret=`.
+## Settings
 
-Verify: open the **Leads** tab in the dashboard drawer, add a lead, and run
-`ob-plugin-lead-manager-lead list` — the lead appears on both sides.
+`api-token` (secret) — shared token for the public REST endpoint
+(`/hooks/lead-manager/...`). Leave empty if only the dashboard tab and the
+local CLI are used (they never need it). Set it when external systems
+(website contact form, automations) must write leads over HTTP:
+
+1. Generate one: `openssl rand -hex 24` (never reuse a real password).
+2. Fill it on the dashboard: Plugins tab → lead-manager → Settings →
+   "Public API token" (hidden field), or
+   `ob-plugin settings lead-manager api-token=<value>` (never echo it).
+3. Give the external caller the token and have it send the header
+   `x-lead-manager-token: <value>` (or `?token=<value>`).
+
+## Verify
+
+- Dashboard tab **Leads**: add a lead — works without any token.
+- Public endpoint without token → HTTP 401:
+  `curl -i -X POST https://<public-endpoint>/api/leads -d '{"name":"x"}'`
+- With the token → HTTP 201:
+  `curl -i -X POST -H 'x-lead-manager-token: <value>' ...`

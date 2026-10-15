@@ -51,8 +51,11 @@ ob-plugin-lead-manager-lead delete lead_xxxx
 ## REST API (for external systems)
 
 Same operations over HTTP when the public endpoint is enabled on the
-dashboard (Plugins tab → Settings → Public endpoint; set the secret there
-and callers pass `X-Open-Bot-Webhook-Secret` or `?secret=`):
+dashboard. **Every call on the public /hooks path requires the shared
+token**: set the `api-token` plugin setting (Plugins tab → Settings, or
+`ob-plugin settings lead-manager api-token=...`) and send it as the
+`x-lead-manager-token` header (or `?token=`). Without it the endpoint
+answers 401. The same-origin app tab needs no token.
 
 ```
 GET    /api/leads?status=&q=&limit=

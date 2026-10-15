@@ -95,8 +95,12 @@ function sanitizeName(v: unknown): string {
 }
 function cleanMime(v: unknown): string {
   const m = String(v == null ? "" : v).trim().toLowerCase();
-  return /^[\w.+-]+\/[\w.+-]{1,60}$/.test(m) ? m : "application/octet-stream";
+  const safe = /^[\w.+-]+\/[\w.+-]{1,60}$/.test(m) ? m : "application/octet-stream";
+  // script-capable formats are stored inert: they must never execute in a browser
+  if (/svg|html|xml|xhtml|javascript|ecmascript|script/i.test(safe)) return "application/octet-stream";
+  return safe;
 }
+const INLINE_MIME = /^(image\/(png|jpeg|gif|webp|avif)|application\/pdf)$/;
 const attPath = (leadId: string, a: Att) => join(FILES_DIR, leadId, `${a.id}__${a.safe}`);
 const ID_RE = /^(lead|att|note)_[a-z0-9_]{1,64}$/;
 
@@ -214,12 +218,41 @@ async function readBody(req: Request): Promise<any> {
   return JSON.parse(body);
 }
 
-async function handleApi(req: Request, path: string, url: URL): Promise<Response> {
+// ---------- public endpoint auth ----------
+// The public /hooks/<id>/ path is internet-facing: EVERY API call on it requires
+// the shared token configured in the plugin settings (writeToken). The
+// same-origin app tab and local (loopback) access stay token-free.
+function readWriteToken(): string {
+  const env = process.env.LEAD_MANAGER_TOKEN;
+  if (env) return env;
+  try {
+    const cfg = JSON.parse(readFileSync(join(homedir(), ".config", "open-bot", `plugin-${PLUGIN_ID}.json`), "utf8"));
+    const v = cfg?.settings?.["api-token"] ?? cfg?.["api-token"] ?? cfg?.configs?.["api-token"] ?? "";
+    return String(v);
+  } catch {
+    return "";
+  }
+}
+function checkPublicAuth(req: Request, url: URL): Response | null {
+  const expected = readWriteToken();
+  const given = req.headers.get("x-lead-manager-token") || url.searchParams.get("token") || "";
+  if (!expected || given !== expected) {
+    return json({ ok: false, erreur: "unauthorized: set the writeToken plugin setting and send it as the x-lead-manager-token header (or ?token=)" }, 401);
+  }
+  return null;
+}
+
+async function handleApi(req: Request, path: string, url: URL, isPublic: boolean): Promise<Response> {
   const seg = path.split("/").filter(Boolean); // e.g. ["api","leads","lead_x","notes"]
   if (seg[0] !== "api") return json({ ok: false, erreur: "not found" }, 404);
+  if (isPublic) {
+    const denied = checkPublicAuth(req, url);
+    if (denied) return denied;
+  }
   const rest = seg.slice(1);
 
-  // GET /api/attachments/:attId — serve the stored file
+  // GET /api/attachments/:attId — serve the stored file (inert + sandboxed:
+  // only safe raster images and PDF are inline, everything else downloads)
   if (req.method === "GET" && rest[0] === "attachments" && rest.length === 2) {
     const attId = rest[1];
     if (!ID_RE.test(attId)) return json({ ok: false, erreur: "not found" }, 404);
@@ -233,13 +266,15 @@ async function handleApi(req: Request, path: string, url: URL): Promise<Response
     } catch {
       return json({ ok: false, erreur: "file missing" }, 404);
     }
-    const inline = att.mime.startsWith("image/") || att.mime === "application/pdf";
+    const inline = INLINE_MIME.test(att.mime);
     return new Response(new Uint8Array(data), {
       headers: {
-        "content-type": att.mime,
+        "content-type": inline ? att.mime : "application/octet-stream",
         "content-length": String(data.byteLength),
         "content-disposition": `${inline ? "inline" : "attachment"}; filename="${att.name.replace(/[^\w.\- ]+/g, "_")}"`,
         "cache-control": "private, max-age=3600",
+        "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox",
+        "x-content-type-options": "nosniff",
         "access-control-allow-origin": "*",
       },
     });
@@ -435,11 +470,12 @@ Bun.serve({
     }
     if (req.method === "OPTIONS") return json({ ok: true });
     if (path === "/healthz") return new Response("ok");
+    const isPublic = url.pathname.startsWith(`/hooks/${PLUGIN_ID}/`);
     if (path === "/" || path === "/index.html") {
       return new Response(indexHtml, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
     }
     try {
-      return await handleApi(req, path, url);
+      return await handleApi(req, path, url, isPublic);
     } catch (e: any) {
       const msg = String(e?.message || e);
       const status = msg === "lead store busy" ? 503 : msg.includes("JSON") ? 400 : 400;

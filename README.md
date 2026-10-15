@@ -13,6 +13,11 @@ timestamped communication history per lead and file/image attachments
 - **REST API**: the same operations over HTTP — same-origin under the app
   tab, and publicly under `/hooks/lead-manager/` when the public endpoint is
   enabled (set the endpoint secret on the dashboard Plugins tab).
+- **Security**: attachments are stored inert (SVG/HTML/XML are never served
+  inline; downloads get `Content-Security-Policy: sandbox` + nosniff), and the
+  public `/hooks` endpoint requires the `api-token` plugin setting on every
+  call (header `x-lead-manager-token`). The same-origin dashboard tab and the
+  local CLI need no token.
 - Data lives in `~/.open-bot/pages-data/lead-manager/leads.json` (survives
   updates), guarded by a lock file shared by the CLI and the page server.
 - No settings, no vault keys.
