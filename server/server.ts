@@ -176,13 +176,13 @@ function checkLead(l: Lead) {
 
 // ---------- API ----------
 function json(res: unknown, status = 200): Response {
+  // Same-origin everywhere (dashboard proxy or loopback): no CORS headers —
+  // a wildcard origin would let any website read the lead store from the
+  // user's browser.
   return new Response(JSON.stringify(res), {
     status,
     headers: {
       "content-type": "application/json; charset=utf-8",
-      "access-control-allow-origin": "*",
-      "access-control-allow-headers": "content-type, x-open-bot-webhook-secret",
-      "access-control-allow-methods": "GET, POST, PATCH, DELETE, OPTIONS",
     },
   });
 }
@@ -275,7 +275,6 @@ async function handleApi(req: Request, path: string, url: URL, isPublic: boolean
         "cache-control": "private, max-age=3600",
         "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox",
         "x-content-type-options": "nosniff",
-        "access-control-allow-origin": "*",
       },
     });
   }

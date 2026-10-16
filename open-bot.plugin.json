@@ -2,7 +2,7 @@
   "$schema": "/home/agent/.config/opencode/skills/plugin/open-bot.plugin.schema.json",
   "id": "lead-manager",
   "name": "Lead Manager",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Shared lead store (mini-CRM) for open-bot: SME leads with name, company, phone, email, pipeline status, source, tags and a timestamped communication history per lead. Other plugins, cron jobs and agents add, modify and delete entries through a JSON CLI, external systems through a REST endpoint, and the user sees and edits everything in the Leads tab of the dashboard (language auto-detected FR/EN).",
   "author": "shpaw415",
   "repo": "shpaw415/lead-manager",
