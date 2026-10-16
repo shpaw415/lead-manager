@@ -1,5 +1,5 @@
 /**
- * lead-manager — WCAG contrast audit for both themes (Justin's rule: dark + light).
+ * lead-manager — WCAG contrast audit for both themes (rule: dark + light).
  * Extracts the CSS variables from the served page and checks the button/text pairs.
  * Usage: UI_PORT=4741 bun scripts/contrast-check.ts
  */
