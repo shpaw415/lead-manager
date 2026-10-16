@@ -445,21 +445,25 @@ async function handleApi(req: Request, path: string, url: URL, isPublic: boolean
 }
 
 // ---------- server ----------
-let indexHtml = "";
-// the installed payload is PREFIXED (ob-plugin-<id>-index.html); the bare name
-// only exists when running from the source tree
-for (const p of [
-  join(import.meta.dir, `ob-plugin-${PLUGIN_ID}-index.html`),
-  join(import.meta.dir, "index.html"),
-]) {
-  try {
-    indexHtml = readFileSync(p, "utf8");
-    break;
-  } catch {}
-}
+// UI serving (dashboard server directive 2026-10-16): frozen installs get the
+// control-plane UI bundle via OPEN_BOT_PAGE_UI; local checkouts and previews
+// import index.html live (bun --hot). No disk read at startup, no prefixed
+// payload-name fallback.
+const HTML_HEADERS = { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" };
+const uiBundle = process.env.OPEN_BOT_PAGE_UI || "";
+const serveUi = () =>
+  uiBundle
+    ? new Response(Bun.file(uiBundle), { headers: HTML_HEADERS })
+    : new Response(Bun.file(join(import.meta.dir, "index.html")), { headers: HTML_HEADERS });
+// The HTML import is only valid as a static routes value, so branch on the
+// mode before Bun.serve.
+const routes = uiBundle
+  ? { "/": () => serveUi() }
+  : { "/": await import("./index.html").then((m) => m.default) };
 
 Bun.serve({
   port: Number(process.env.OPEN_BOT_PAGE_PORT ?? 4747),
+  routes,
   async fetch(req) {
     const url = new URL(req.url);
     let path = url.pathname;
@@ -471,7 +475,7 @@ Bun.serve({
     if (path === "/healthz") return new Response("ok");
     const isPublic = url.pathname.startsWith(`/hooks/${PLUGIN_ID}/`);
     if (path === "/" || path === "/index.html") {
-      return new Response(indexHtml, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
+      return serveUi();
     }
     try {
       return await handleApi(req, path, url, isPublic);
